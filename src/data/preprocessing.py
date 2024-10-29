@@ -1,182 +1,265 @@
-import pandas as pd
-import numpy as np
-from sqlalchemy import create_engine
-from datetime import datetime
-import re
-from tqdm import tqdm
-import json
+"""
+Phishing Website Data Analysis Script
+====================================
 
-class PhishingDataProcessor:
-    def __init__(self, db_connection_string):
+This script performs initial data analysis on the website_data table for phishing detection research.
+
+Purpose:
+--------
+- Load and analyze website data from PostgreSQL database
+- Perform basic statistical analysis on key features
+- Generate visualizations of data distributions
+- Create processed dataset for machine learning
+
+Input:
+------
+PostgreSQL database table 'website_data' with the following key columns:
+- id: unique identifier
+- status: website status (analysis focuses on status = 7)
+- url: website URL
+- domain: domain name
+- domain_registrar: registrar information
+- whois_date: WHOIS record date
+- registrant_name: domain registrant
+- admin_name: administrative contact
+- tech_name: technical contact
+- ip_address: website IP
+- https_certificate_issuer: SSL certificate issuer
+- phishing_flag: phishing indication
+- phishing_confirm_flag: confirmed phishing status
+
+Output:
+-------
+1. CSV File (processed_website_data.csv):
+   - Processed dataset with extracted features
+   - Binary indicators for presence of registration info
+   - Calculated domain age
+   - Cleaned and formatted fields
+
+2. Visualization (initial_analysis.png):
+   - Missing values heatmap
+   - Binary features distribution
+   - Domain age distribution
+   - Top domain registrars
+
+3. Console Output:
+   - Basic statistics
+   - Data type information
+   - Missing value analysis
+   - Distribution of key features
+   - Top categories in categorical variables
+
+Requirements:
+------------
+- Python 3.8+
+- Required packages:
+  - pandas
+  - psycopg2-binary
+  - sqlalchemy
+  - matplotlib
+  - seaborn
+
+Database Configuration:
+---------------------
+Update the following in connect_to_db():
+- dbname: database name
+- user: database username
+- password: database password
+- host: database host
+
+Usage:
+------
+1. Configure database connection parameters
+2. Run: python preprocessing.py
+3. Check output files and console logs
+
+Error Handling:
+-------------
+- Logs are written to console with timestamps
+- Database connection errors are caught and reported
+- Data processing errors are logged with details
+"""
+
+import pandas as pd
+import psycopg2
+from sqlalchemy import create_engine
+import numpy as np
+from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def connect_to_db():
+    """Database connection function with error handling"""
+    try:
+        conn = psycopg2.connect(
+            dbname="website_data",  # データベース名を実際のものに変更してください
+            user="postgres",
+            password="asomura",  # 実際のパスワードに変更してください
+            host="localhost"
+        )
+        logging.info("Successfully connected to database")
+        return conn
+    except Exception as e:
+        logging.error(f"Database connection error: {e}")
+        return None
+
+def load_and_analyze_data():
+    """Load and perform initial analysis with extensive error checking"""
+    
+    conn = connect_to_db()
+    if not conn:
+        return None
+
+    try:
+        # First, let's check what data we actually have
+        check_query = """
+        SELECT COUNT(*) as count, 
+               COUNT(phishing_flag) as flag_count,
+               COUNT(phishing_confirm_flag) as confirm_flag_count
+        FROM website_data 
+        WHERE status = 7
         """
-        データベース接続とデータ処理の初期化
-        Args:
-            db_connection_string: PostgreSQLの接続文字列
-        """
-        self.engine = create_engine(db_connection_string)
-        self.data = None
         
-    def load_data(self):
-        """データベースからデータを読み込む"""
+        check_df = pd.read_sql_query(check_query, conn)
+        logging.info(f"Data counts: {check_df.to_dict('records')[0]}")
+
+        # Main data query with error handling
         query = """
         SELECT 
-            id,
-            status,
-            phish_id,
-            verified,
-            online_status,
-            target,
+            id, 
+            COALESCE(status, -1) as status,
+            url,
             domain,
             domain_registrar,
+            whois_date,
             registrant_name,
             admin_name,
             tech_name,
             ip_address,
             ip_organization,
             ip_location,
-            hosting_provider,
             https_certificate_issuer,
-            https_certificate_domain,
-            phishing_flag,
-            phishing_confirm_flag,
-            actor,
-            whois_domain,
-            domain_status,
-            url
-        FROM website_data
+            COALESCE(phishing_flag, FALSE) as phishing_flag,
+            COALESCE(phishing_confirm_flag, FALSE) as phishing_confirm_flag
+        FROM website_data 
+        WHERE status = 7
         """
-        self.data = pd.read_sql(query, self.engine)
-        print(f"Loaded {len(self.data)} records")
-        return self
+        
+        df = pd.read_sql_query(query, conn)
+        logging.info(f"Loaded {len(df)} records from database")
+        
+        # Basic data analysis with error checking
+        print("\n=== Basic Data Analysis ===")
+        print(f"Total number of records: {len(df)}")
+        
+        # Check data types
+        print("\nData Types:")
+        print(df.dtypes)
+        
+        # Analyze missing values
+        print("\nMissing values analysis:")
+        missing_data = df.isnull().sum()
+        print(missing_data)
+        
+        # Analyze boolean columns
+        if 'phishing_flag' in df.columns and 'phishing_confirm_flag' in df.columns:
+            print("\nPhishing flags distribution:")
+            flag_dist = pd.DataFrame({
+                'phishing_flag': df['phishing_flag'].value_counts(),
+                'phishing_confirm_flag': df['phishing_confirm_flag'].value_counts()
+            })
+            print(flag_dist)
+        
+        # Analyze domain registrars (top 10)
+        if 'domain_registrar' in df.columns:
+            print("\nTop 10 domain registrars:")
+            print(df['domain_registrar'].value_counts().head(10))
+        
+        # Analyze certificate issuers (top 10)
+        if 'https_certificate_issuer' in df.columns:
+            print("\nTop 10 certificate issuers:")
+            print(df['https_certificate_issuer'].value_counts().head(10))
+        
+        # Create processed dataframe
+        processed_df = df.copy()
+        
+        # Create binary features
+        processed_df['has_registrant'] = processed_df['registrant_name'].notna().astype(int)
+        processed_df['has_admin'] = processed_df['admin_name'].notna().astype(int)
+        processed_df['has_tech'] = processed_df['tech_name'].notna().astype(int)
+        
+        # Process dates
+        if 'whois_date' in processed_df.columns:
+            processed_df['whois_date'] = pd.to_datetime(processed_df['whois_date'], errors='coerce')
+            current_time = pd.Timestamp.now()
+            processed_df['domain_age_days'] = (current_time - processed_df['whois_date']).dt.days
+        
+        # Save processed data
+        processed_df.to_csv('processed_website_data.csv', index=False)
+        logging.info("Saved processed data to CSV")
+        
+        return processed_df
+        
+    except Exception as e:
+        logging.error(f"Error in data analysis: {e}")
+        return None
+    finally:
+        conn.close()
+
+def create_visualization(df):
+    """Create visualizations with error checking"""
+    if df is None or len(df) == 0:
+        logging.error("No data available for visualization")
+        return
     
-    def analyze_data_quality(self):
-        """データ品質の分析"""
-        analysis = {
-            'total_records': len(self.data),
-            'missing_values': self.data.isnull().sum().to_dict(),
-            'verified_distribution': self.data['verified'].value_counts().to_dict(),
-            'phishing_flags': self.data['phishing_flag'].value_counts().to_dict(),
-            'status_distribution': self.data['status'].value_counts().to_dict(),
-            'unique_domains': len(self.data['domain'].unique()),
-            'unique_registrars': len(self.data['domain_registrar'].unique()),
-            'unique_issuers': len(self.data['https_certificate_issuer'].unique())
-        }
-        return analysis
-    
-    def extract_domain_features(self):
-        """ドメインに関する特徴量の抽出"""
-        def analyze_domain(domain):
-            if pd.isna(domain):
-                return {
-                    'length': 0,
-                    'num_digits': 0,
-                    'num_special_chars': 0,
-                    'num_segments': 0,
-                    'has_suspicious_keywords': False
-                }
-            
-            suspicious_keywords = ['secure', 'login', 'account', 'bank', 'verify', 'update']
-            
-            return {
-                'length': len(domain),
-                'num_digits': sum(c.isdigit() for c in domain),
-                'num_special_chars': sum(not c.isalnum() for c in domain),
-                'num_segments': len(domain.split('.')),
-                'has_suspicious_keywords': any(keyword in domain.lower() for keyword in suspicious_keywords)
-            }
+    try:
+        plt.figure(figsize=(15, 10))
         
-        # ドメイン特徴量の抽出
-        domain_features = self.data['domain'].apply(analyze_domain)
-        domain_features_df = pd.DataFrame(domain_features.tolist())
+        # Plot 1: Missing values heatmap
+        plt.subplot(2, 2, 1)
+        sns.heatmap(df.isnull(), yticklabels=False, cbar=False)
+        plt.title('Missing Values Heatmap')
         
-        return domain_features_df
-    
-    def extract_whois_features(self):
-        """WHOIS情報からの特徴量抽出"""
-        def analyze_whois(row):
-            return {
-                'has_registrant': not pd.isna(row['registrant_name']),
-                'has_admin': not pd.isna(row['admin_name']),
-                'has_tech': not pd.isna(row['tech_name']),
-                'registrar_present': not pd.isna(row['domain_registrar']),
-                'status_present': not pd.isna(row['domain_status'])
-            }
+        # Plot 2: Binary features distribution
+        plt.subplot(2, 2, 2)
+        binary_features = df[['has_registrant', 'has_admin', 'has_tech']].sum()
+        binary_features.plot(kind='bar')
+        plt.title('Binary Features Distribution')
         
-        whois_features = self.data.apply(analyze_whois, axis=1)
-        whois_features_df = pd.DataFrame(whois_features.tolist())
+        # Plot 3: Domain age distribution (if available)
+        if 'domain_age_days' in df.columns:
+            plt.subplot(2, 2, 3)
+            df['domain_age_days'].dropna().hist(bins=50)
+            plt.title('Domain Age Distribution (days)')
         
-        return whois_features_df
-    
-    def prepare_text_data_for_bert(self):
-        """BERTモデル用のテキストデータ準備"""
-        def combine_text_fields(row):
-            text_fields = []
-            
-            # ドメイン情報
-            if not pd.isna(row['domain']):
-                text_fields.append(f"Domain: {row['domain']}")
-            
-            # WHOIS情報
-            if not pd.isna(row['whois_domain']):
-                text_fields.append(f"WHOIS: {row['whois_domain']}")
-            
-            # 証明書情報
-            if not pd.isna(row['https_certificate_issuer']):
-                text_fields.append(f"Certificate Issuer: {row['https_certificate_issuer']}")
-            
-            # 組織情報
-            if not pd.isna(row['ip_organization']):
-                text_fields.append(f"Organization: {row['ip_organization']}")
-            
-            return ' [SEP] '.join(text_fields)
+        # Plot 4: Registrar distribution (top 10)
+        if 'domain_registrar' in df.columns:
+            plt.subplot(2, 2, 4)
+            df['domain_registrar'].value_counts().head(10).plot(kind='bar')
+            plt.title('Top 10 Domain Registrars')
+            plt.xticks(rotation=45)
         
-        self.data['bert_input_text'] = self.data.apply(combine_text_fields, axis=1)
-        return self.data['bert_input_text']
-    
-    def create_training_dataset(self):
-        """トレーニングデータセットの作成"""
-        # 特徴量の結合
-        domain_features = self.extract_domain_features()
-        whois_features = self.extract_whois_features()
+        plt.tight_layout()
+        plt.savefig('initial_analysis.png', bbox_inches='tight')
+        plt.close()
+        logging.info("Successfully created visualizations")
         
-        # ラベルの準備（phishing_flagとphishing_confirm_flagの組み合わせ）
-        labels = (self.data['phishing_flag'] | self.data['phishing_confirm_flag']).astype(int)
-        
-        # テキストデータの準備
-        text_data = self.prepare_text_data_for_bert()
-        
-        # データセットの作成
-        dataset = pd.concat([
-            domain_features,
-            whois_features,
-            pd.DataFrame({'text_data': text_data, 'label': labels})
-        ], axis=1)
-        
-        return dataset
-    
-    def save_processed_data(self, output_path):
-        """処理済みデータの保存"""
-        dataset = self.create_training_dataset()
-        dataset.to_csv(output_path, index=False)
-        print(f"Saved processed dataset to {output_path}")
+    except Exception as e:
+        logging.error(f"Error in visualization: {e}")
 
 def main():
-    # データベース接続文字列（適切な値に置き換えてください）
-    db_connection = "postgresql://username:password@localhost:5432/database_name"
+    logging.info("Starting data analysis")
+    df = load_and_analyze_data()
     
-    # データ処理パイプラインの実行
-    processor = PhishingDataProcessor(db_connection)
-    
-    # データの読み込みと分析
-    processor.load_data()
-    
-    # データ品質の分析
-    quality_analysis = processor.analyze_data_quality()
-    print("\nData Quality Analysis:")
-    print(json.dumps(quality_analysis, indent=2))
-    
-    # 処理済みデータの保存
-    processor.save_processed_data('processed_phishing_data.csv')
+    if df is not None and not df.empty:
+        create_visualization(df)
+        logging.info("Analysis completed successfully")
+    else:
+        logging.error("No data to analyze")
 
 if __name__ == "__main__":
     main()
