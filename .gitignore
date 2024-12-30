@@ -1,0 +1,17 @@
+*.txt
+*.old
+*.gz
+*.tgz
+*.tar.gz
+*.csv
+*.log
+*.pyc
+
+# Pythonのキャッシュフォルダを無視
+__pycache__/
+
+nitter/logs/
+
+# ただし logs/ 全体は無視しない
+!logs/
+!logs/**

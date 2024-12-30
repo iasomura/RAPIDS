@@ -1,0 +1,8 @@
+{
+  "database": {
+    "host": "localhost",
+    "dbname": "website_data",
+    "user": "postgres",
+    "password": "asomura"
+  }
+}
