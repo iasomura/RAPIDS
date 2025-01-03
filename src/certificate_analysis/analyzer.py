@@ -15,7 +15,7 @@ import numpy as np
 import json
 import logging
 from datetime import datetime
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from typing import Dict, Tuple, List
 import warnings
 
@@ -70,7 +70,7 @@ class CertificateAnalyzer:
         for dir_path in self.output_dirs.values():
             os.makedirs(dir_path, exist_ok=True)
 
-    def connect_databases(self):
+def connect_databases(self):
         """Establish database connections using SQLAlchemy"""
         try:
             # Load database configuration
@@ -87,157 +87,18 @@ class CertificateAnalyzer:
             self.normal_engine = create_engine(normal_conn_str)
             
             # Test connections
-            with self.phish_engine.connect() as conn:
-                conn.execute("SELECT 1")
-            with self.normal_engine.connect() as conn:
-                conn.execute("SELECT 1")
+            with self.phish_engine.connect() as connection:
+                connection.execute(text("SELECT 1")).fetchone()
+                
+            with self.normal_engine.connect() as connection:
+                connection.execute(text("SELECT 1")).fetchone()
                 
             self.logger.info("Database connections established successfully")
             
         except Exception as e:
             self.logger.error(f"Failed to connect to databases: {str(e)}")
             raise
-
-    def calculate_security_score(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculate comprehensive security score based on multiple factors
         
-        Args:
-            df: DataFrame containing certificate data
-            
-        Returns:
-            DataFrame with added security scores
-        """
-        # Component weights
-        weights = {
-            'tls_version': 0.25,
-            'key_size': 0.25,
-            'cert_issuer': 0.20,
-            'domain_features': 0.15,
-            'cipher_strength': 0.15
-        }
-        
-        # TLS version score
-        df['tls_score'] = df['protocol_version'].map({
-            'TLSv1.3': 1.0,
-            'TLSv1.2': 0.7,
-            'TLSv1.1': 0.3,
-            'TLSv1.0': 0.1,
-            None: 0.0
-        }).fillna(0.0)
-        
-        # Key size score
-        df['key_score'] = df['public_key_bits'].apply(
-            lambda x: min(1.0, (x or 0) / self.security_config['min_key_size'])
-        )
-        
-        # Certificate issuer score
-        df['issuer_score'] = df['https_certificate_issuer'].apply(
-            lambda x: 0.2 if x in self.security_config['high_risk_issuers'] else 1.0
-        )
-        
-        # Domain features score
-        df['domain_score'] = df.apply(self._calculate_domain_score, axis=1)
-        
-        # Cipher strength score
-        df['cipher_score'] = df['cipher_suite'].apply(self._calculate_cipher_score)
-        
-        # Calculate final security score
-        df['security_score'] = (
-            weights['tls_version'] * df['tls_score'] +
-            weights['key_size'] * df['key_score'] +
-            weights['cert_issuer'] * df['issuer_score'] +
-            weights['domain_features'] * df['domain_score'] +
-            weights['cipher_strength'] * df['cipher_score']
-        )
-        
-        return df
-
-    def _calculate_domain_score(self, row: pd.Series) -> float:
-        """Calculate domain security score"""
-        domain_features = row.get('domain_features', {})
-        if not domain_features:
-            return 0.0
-            
-        scores = []
-        
-        # Length score
-        length = domain_features.get('length', 0)
-        length_score = 1.0 if length < 30 else (0.5 if length < 50 else 0.0)
-        scores.append(length_score)
-        
-        # Entropy score
-        entropy = domain_features.get('entropy', 0)
-        entropy_score = 1.0 if entropy < 4.0 else (0.5 if entropy < 5.0 else 0.0)
-        scores.append(entropy_score)
-        
-        # Special character score
-        special_chars = domain_features.get('special_char_count', 0)
-        special_score = 1.0 if special_chars == 0 else (0.5 if special_chars < 3 else 0.0)
-        scores.append(special_score)
-        
-        return np.mean(scores)
-
-    def _calculate_cipher_score(self, cipher: str) -> float:
-        """Calculate cipher strength score"""
-        if not cipher:
-            return 0.0
-            
-        score = 0.0
-        cipher = cipher.upper()
-        
-        # Check for strong encryption
-        if any(x in cipher for x in ['GCM', 'CHACHA20', 'POLY1305']):
-            score += 0.5
-        
-        # Check for strong hash
-        if any(x in cipher for x in ['SHA384', 'SHA256']):
-            score += 0.3
-        
-        # Check for perfect forward secrecy
-        if any(x in cipher for x in ['ECDHE', 'DHE']):
-            score += 0.2
-            
-        return score
-
-    def analyze_cipher_suites(self, df: pd.DataFrame) -> Dict:
-        """
-        Analyze cipher suite distributions and security
-        
-        Args:
-            df: DataFrame containing certificate data
-            
-        Returns:
-            Dictionary containing cipher suite analysis
-        """
-        cipher_distribution = df.groupby(['site_type', 'cipher_suite']).size()
-        cipher_dist_dict = {f"{site_type}_{cipher}": count 
-                          for (site_type, cipher), count in cipher_distribution.items()}
-
-        # Categorize ciphers
-        def categorize_cipher(cipher):
-            if not cipher:
-                return 'unknown'
-            cipher = cipher.upper()
-            if any(x in cipher for x in ['GCM', 'CHACHA20', 'POLY1305']):
-                return 'strong'
-            elif 'SHA384' in cipher:
-                return 'medium'
-            else:
-                return 'weak'
-
-        df['cipher_category'] = df['cipher_suite'].apply(categorize_cipher)
-        category_dist = df.groupby(['site_type', 'cipher_category']).size().to_dict()
-
-        return {
-            'total_unique_ciphers': df['cipher_suite'].nunique(),
-            'cipher_distribution': cipher_dist_dict,
-            'category_distribution': category_dist,
-            'strong_cipher_count': len(df[df['cipher_category'] == 'strong']),
-            'weak_cipher_count': len(df[df['cipher_category'].isin(['weak', 'unknown'])])
-        }
-
-
 def get_data_from_db(self, engine, site_type: str) -> pd.DataFrame:
         """
         Retrieve and process data from database with enhanced error handling
@@ -268,7 +129,7 @@ def get_data_from_db(self, engine, site_type: str) -> pd.DataFrame:
         """
         
         try:
-            df = pd.read_sql(query, engine)
+            df = pd.read_sql_query(query, engine)
             df['site_type'] = site_type
             
             # Process certificates
@@ -306,7 +167,7 @@ def get_data_from_db(self, engine, site_type: str) -> pd.DataFrame:
             self.logger.error(f"Error retrieving data for {site_type} sites: {str(e)}")
             raise
 
-    def analyze_certificates(self) -> Tuple[pd.DataFrame, Dict]:
+def analyze_certificates(self) -> Tuple[pd.DataFrame, Dict]:
         """
         Perform comprehensive certificate analysis with enhanced features
         
@@ -363,9 +224,17 @@ def get_data_from_db(self, engine, site_type: str) -> pd.DataFrame:
         except Exception as e:
             self.logger.error(f"Error in certificate analysis: {str(e)}")
             raise
-
-    def _analyze_validity_periods(self, df: pd.DataFrame) -> Dict:
-        """Analyze certificate validity periods"""
+        
+def _analyze_validity_periods(self, df: pd.DataFrame) -> Dict:
+        """
+        Analyze certificate validity periods
+        
+        Args:
+            df: DataFrame containing certificate data
+            
+        Returns:
+            Dictionary containing validity period analysis
+        """
         validity_analysis = {
             'mean_valid_days': 0,
             'expired_certs': 0,
@@ -393,7 +262,7 @@ def get_data_from_db(self, engine, site_type: str) -> pd.DataFrame:
         
         return validity_analysis
 
-    def save_results(self, df: pd.DataFrame, stats: Dict):
+def save_results(self, df: pd.DataFrame, stats: Dict):
         """
         Save analysis results with compression and versioning
         
@@ -417,3 +286,246 @@ def get_data_from_db(self, engine, site_type: str) -> pd.DataFrame:
         
         self.logger.info(f"Results saved: {output_path}")
         self.logger.info(f"Statistics saved: {stats_path}")
+
+def calculate_security_score(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate comprehensive security score based on multiple factors
+        
+        Args:
+            df: DataFrame containing certificate data
+            
+        Returns:
+            DataFrame with added security scores
+        """
+        # Component weights
+        weights = {
+            'tls_version': 0.25,
+            'key_size': 0.25,
+            'cert_issuer': 0.20,
+            'domain_features': 0.15,
+            'cipher_strength': 0.15
+        }
+        
+        # TLS version score
+        df['tls_score'] = df['protocol_version'].map({
+            'TLSv1.3': 1.0,
+            'TLSv1.2': 0.7,
+            'TLSv1.1': 0.3,
+            'TLSv1.0': 0.1,
+            None: 0.0
+        }).fillna(0.0)
+        
+        # Key size score
+        df['key_score'] = df['public_key_bits'].apply(
+            lambda x: min(1.0, (x or 0) / self.security_config['min_key_size'])
+        )
+        
+        # Certificate issuer score with extended validation
+        df['issuer_score'] = df.apply(self._calculate_issuer_score, axis=1)
+        
+        # Domain features score with enhanced analysis
+        df['domain_score'] = df.apply(self._calculate_domain_score, axis=1)
+        
+        # Cipher strength score with detailed analysis
+        df['cipher_score'] = df['cipher_suite'].apply(self._calculate_cipher_score)
+        
+        # Additional security features score
+        df['additional_security_score'] = df.apply(self._calculate_additional_security_score, axis=1)
+        
+        # Calculate final security score with weighted components
+        df['security_score'] = (
+            weights['tls_version'] * df['tls_score'] +
+            weights['key_size'] * df['key_score'] +
+            weights['cert_issuer'] * df['issuer_score'] +
+            weights['domain_features'] * df['domain_score'] +
+            weights['cipher_strength'] * df['cipher_score']
+        ) * df['additional_security_score']  # Apply additional security modifier
+        
+        return df
+
+def _calculate_issuer_score(self, row: pd.Series) -> float:
+        """Calculate detailed certificate issuer security score"""
+        issuer = row['https_certificate_issuer']
+        if issuer in self.security_config['high_risk_issuers']:
+            return 0.2
+            
+        score = 1.0
+        
+        # Check for well-known trusted CAs
+        trusted_cas = ['DigiCert', 'Let\'s Encrypt', 'Sectigo', 'GlobalSign']
+        if any(ca in str(issuer) for ca in trusted_cas):
+            score *= 1.2
+        
+        # Check for EV certificate indicators
+        if 'Extended Validation' in str(row.get('cert_details', {})):
+            score *= 1.3
+            
+        return min(1.0, score)  # Cap at 1.0
+
+def _calculate_domain_score(self, row: pd.Series) -> float:
+        """Calculate comprehensive domain security score"""
+        domain_features = row.get('domain_features', {})
+        if not domain_features:
+            return 0.0
+            
+        scores = []
+        
+        # Length score with nuanced evaluation
+        length = domain_features.get('length', 0)
+        length_score = 1.0 if length < 30 else (0.7 if length < 40 else (0.4 if length < 50 else 0.0))
+        scores.append(length_score)
+        
+        # Entropy score with refined thresholds
+        entropy = domain_features.get('entropy', 0)
+        entropy_score = 1.0 if entropy < 3.5 else (0.7 if entropy < 4.0 else (0.4 if entropy < 4.5 else 0.0))
+        scores.append(entropy_score)
+        
+        # Special character analysis
+        special_chars = domain_features.get('special_char_count', 0)
+        special_score = 1.0 if special_chars == 0 else (0.7 if special_chars < 2 else (0.3 if special_chars < 4 else 0.0))
+        scores.append(special_score)
+        
+        # Subdomain depth analysis
+        subdomain_count = domain_features.get('subdomain_count', 0)
+        subdomain_score = 1.0 if subdomain_count < 2 else (0.7 if subdomain_count < 3 else 0.3)
+        scores.append(subdomain_score)
+        
+        # IP address presence check
+        if domain_features.get('is_ip_address', False):
+            scores.append(0.3)
+            
+        return np.mean(scores)
+
+def _calculate_cipher_score(self, cipher: str) -> float:
+        """Calculate detailed cipher strength score"""
+        if not cipher:
+            return 0.0
+            
+        score = 0.0
+        cipher = str(cipher).upper()
+        
+        # Evaluate encryption algorithm
+        if 'CHACHA20' in cipher:
+            score += 0.4  # Modern, highly secure
+        elif 'GCM' in cipher:
+            score += 0.35  # Very good
+        elif 'CBC' in cipher:
+            score += 0.25  # Acceptable
+            
+        # Evaluate hash function
+        if 'SHA384' in cipher:
+            score += 0.3
+        elif 'SHA256' in cipher:
+            score += 0.25
+        elif 'SHA1' in cipher:
+            score += 0.1
+            
+        # Evaluate key exchange
+        if 'ECDHE' in cipher:
+            score += 0.3  # Perfect forward secrecy with elliptic curves
+        elif 'DHE' in cipher:
+            score += 0.25  # Perfect forward secrecy
+            
+        return min(1.0, score)  # Cap at 1.0
+
+def _calculate_additional_security_score(self, row: pd.Series) -> float:
+        """Calculate score for additional security features"""
+        score = 1.0
+        cert_details = row.get('cert_details', {})
+        
+        # Check for HSTS
+        if 'hsts' in str(cert_details.get('security_headers', '')).lower():
+            score *= 1.1
+            
+        # Check for CAA records
+        if cert_details.get('has_caa_records', False):
+            score *= 1.1
+            
+        # Check certificate transparency
+        if cert_details.get('certificate_transparency', False):
+            score *= 1.1
+            
+        return min(1.2, score)  # Cap bonus at 20%
+
+def analyze_cipher_suites(self, df: pd.DataFrame) -> Dict:
+        """
+        Analyze cipher suite distributions and security patterns
+        
+        Args:
+            df: DataFrame containing certificate data
+            
+        Returns:
+            Dictionary containing comprehensive cipher suite analysis
+        """
+        # Basic distribution analysis
+        cipher_distribution = df.groupby(['site_type', 'cipher_suite']).size()
+        cipher_dist_dict = {f"{site_type}_{cipher}": count 
+                          for (site_type, cipher), count in cipher_distribution.items()}
+
+        # Enhanced cipher categorization
+        def categorize_cipher(cipher):
+            if not cipher:
+                return 'unknown'
+            cipher = str(cipher).upper()
+            
+            # Modern, highly secure configurations
+            if 'CHACHA20' in cipher:
+                return 'excellent'
+            # Strong configurations
+            elif 'GCM' in cipher and ('ECDHE' in cipher or 'DHE' in cipher):
+                return 'strong'
+            # Acceptable configurations
+            elif 'CBC' in cipher and 'SHA256' in cipher:
+                return 'acceptable'
+            # Legacy configurations
+            elif 'CBC' in cipher or 'SHA1' in cipher:
+                return 'legacy'
+            else:
+                return 'weak'
+
+        df['cipher_category'] = df['cipher_suite'].apply(categorize_cipher)
+        category_dist = df.groupby(['site_type', 'cipher_category']).size().to_dict()
+
+        # Forward secrecy analysis
+        has_pfs = df['cipher_suite'].apply(lambda x: 'ECDHE' in str(x) or 'DHE' in str(x))
+        pfs_stats = {
+            'total_with_pfs': int(has_pfs.sum()),
+            'percentage_with_pfs': float(has_pfs.mean() * 100)
+        }
+
+        # Key exchange algorithm analysis
+        key_exchange_types = df['cipher_suite'].apply(self._extract_key_exchange).value_counts().to_dict()
+
+        return {
+            'total_unique_ciphers': df['cipher_suite'].nunique(),
+            'cipher_distribution': cipher_dist_dict,
+            'category_distribution': category_dist,
+            'forward_secrecy_stats': pfs_stats,
+            'key_exchange_distribution': key_exchange_types,
+            'security_stats': {
+                'excellent_count': int(df[df['cipher_category'] == 'excellent'].shape[0]),
+                'strong_count': int(df[df['cipher_category'] == 'strong'].shape[0]),
+                'acceptable_count': int(df[df['cipher_category'] == 'acceptable'].shape[0]),
+                'legacy_count': int(df[df['cipher_category'] == 'legacy'].shape[0]),
+                'weak_count': int(df[df['cipher_category'] == 'weak'].shape[0])
+            }
+        }
+
+def _extract_key_exchange(self, cipher: str) -> str:
+        """Extract key exchange algorithm from cipher suite"""
+        if not cipher:
+            return 'unknown'
+        cipher = str(cipher).upper()
+        
+        if 'ECDHE' in cipher:
+            return 'ECDHE'
+        elif 'DHE' in cipher or 'EDH' in cipher:
+            return 'DHE'
+        elif 'ECDH' in cipher:
+            return 'ECDH'
+        elif 'DH' in cipher:
+            return 'DH'
+        elif 'RSA' in cipher:
+            return 'RSA'
+        else:
+            return 'other'

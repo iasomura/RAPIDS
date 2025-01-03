@@ -25,13 +25,6 @@ import sys
 import logging
 from analyzer import CertificateAnalyzer
 
-# プロジェクトのルートディレクトリをPythonパスに追加
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-sys.path.append(os.path.dirname(current_dir))
-sys.path.append(current_dir)
-
-
 def setup_environment():
     """
     Set up the project environment
@@ -39,9 +32,16 @@ def setup_environment():
     Returns:
         str: Project root directory path
     """
-    # Get project root directory
+    # Get the current script directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    
+    # Navigate up to the RAPIDS root directory
+    # From /RAPIDS/src/certificate_analysis/main.py to /RAPIDS
+    project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
+    
+    # Add project paths to Python path
+    sys.path.append(os.path.dirname(current_dir))
+    sys.path.append(current_dir)
     
     return project_root
 
@@ -84,6 +84,12 @@ def main():
     """Main execution function"""
     try:
         project_root = setup_environment()
+        
+        # Verify the config file exists
+        config_path = os.path.join(project_root, 'config', 'database.json')
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Config file not found at: {config_path}")
+            
         run_analysis(project_root)
         
     except Exception as e:

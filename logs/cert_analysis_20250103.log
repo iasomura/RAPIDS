@@ -1,0 +1,5 @@
+2025-01-03 05:48:17,252 - ERROR - Failed to connect to databases: Not an executable object: 'SELECT 1'
+2025-01-03 05:48:17,252 - ERROR - Error in main execution: Not an executable object: 'SELECT 1'
+2025-01-03 05:50:14,325 - ERROR - Failed to connect to databases: Not an executable object: 'SELECT 1'
+2025-01-03 05:50:14,327 - ERROR - Error in main execution: Not an executable object: 'SELECT 1'
+2025-01-03 06:15:25,905 - ERROR - Error in main execution: 'CertificateAnalyzer' object has no attribute 'connect_databases'
