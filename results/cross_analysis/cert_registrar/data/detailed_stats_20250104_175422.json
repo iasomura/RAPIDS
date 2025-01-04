@@ -1,0 +1,8 @@
+{
+    "total_sites": 200,
+    "phishing_sites": 100,
+    "normal_sites": 100,
+    "unique_issuers": 0,
+    "avg_chain_length": 0,
+    "avg_key_size": 0
+}

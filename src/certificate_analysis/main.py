@@ -112,12 +112,15 @@ def run_analysis(project_root: str, logger: logging.Logger):
     """
     try:
         # Import the analyzer here to ensure the environment is set up first
-        from certificate_analysis.analyzer import CertificateAnalyzer
-        
+        #from certificate_analysis.analyzer import CertificateAnalyzer
+        # 相対インポートに変更
+        #from .analyzer import CertificateAnalyzer
+        from analyzer.base import CertificateAnalyzer  # インポートパスを変更
+
         # Initialize analyzer
         analyzer = CertificateAnalyzer(project_root)
         logger.info("Certificate Analyzer initialized")
-        
+                
         # Run analysis
         logger.info("Starting certificate analysis")
         results_df, stats = analyzer.analyze_certificates()

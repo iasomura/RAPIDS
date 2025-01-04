@@ -6,6 +6,7 @@
 *.csv
 *.log
 *.pyc
+*.Identifier
 
 # Pythonのキャッシュフォルダを無視
 __pycache__/
