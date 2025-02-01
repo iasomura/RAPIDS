@@ -1,0 +1,7 @@
+2025-01-19 13:52:37,435 - INFO - データベース更新処理を開始
+2025-01-19 13:52:37,436 - INFO - 入力ファイル: /home/asomura/waseda/nextstep/RAPIDS/data/processed/validated_registrars_20250119_135042.csv
+2025-01-19 13:52:37,444 - INFO - 読み込みレコード数: 1996
+2025-01-19 13:52:37,489 - INFO - 更新対象レコード数: 147
+2025-01-19 13:52:40,556 - ERROR - 処理中にエラーが発生: connection to server at "192.168.1.92", port 5432 failed: No route to host
+	Is the server running on that host and accepting TCP/IP connections?
+

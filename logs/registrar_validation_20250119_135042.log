@@ -1,0 +1,13 @@
+2025-01-19 13:50:42,733 - INFO - レジストラ情報の検証を開始
+2025-01-19 13:50:42,735 - INFO - 入力ファイル: /home/asomura/waseda/nextstep/RAPIDS/data/processed/extracted_registrars_20250119_134833.csv
+2025-01-19 13:50:42,741 - INFO - 読み込みレコード数: 1996
+2025-01-19 13:50:42,822 - INFO - 総レコード数: 1996
+2025-01-19 13:50:42,822 - INFO - 有効なレジストラ: 147
+2025-01-19 13:50:42,822 - INFO - 検証成功率: 7.36%
+2025-01-19 13:50:42,824 - INFO - 
+検証理由の分布:
+2025-01-19 13:50:42,824 - INFO - null_value: 1597 (80.01%)
+2025-01-19 13:50:42,824 - INFO - unknown_registrar: 252 (12.63%)
+2025-01-19 13:50:42,824 - INFO - known_registrar: 76 (3.81%)
+2025-01-19 13:50:42,824 - INFO - valid_pattern: 71 (3.56%)
+2025-01-19 13:50:42,824 - INFO - 結果を保存: /home/asomura/waseda/nextstep/RAPIDS/data/processed/validated_registrars_20250119_135042.csv

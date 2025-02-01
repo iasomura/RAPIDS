@@ -1,0 +1,7 @@
+2025-01-19 13:53:03,414 - INFO - データベース更新処理を開始
+2025-01-19 13:53:03,414 - INFO - 入力ファイル: /home/asomura/waseda/nextstep/RAPIDS/data/processed/validated_registrars_20250119_135042.csv
+2025-01-19 13:53:03,418 - INFO - 読み込みレコード数: 1996
+2025-01-19 13:53:03,460 - INFO - 更新対象レコード数: 147
+2025-01-19 13:53:03,538 - INFO - 更新成功: 147
+2025-01-19 13:53:03,538 - INFO - 更新失敗: 0
+2025-01-19 13:53:03,541 - INFO - 更新サマリーを保存: /home/asomura/waseda/nextstep/RAPIDS/data/processed/update_summary_20250119_135303.csv

@@ -1,0 +1,23 @@
+{
+  "timestamp": "20250113_091810",
+  "total_certificates": {
+    "phishing": 10974,
+    "normal": 9591
+  },
+  "key_findings": {
+    "issuer_diversity": {
+      "phishing": 136,
+      "normal": 191
+    },
+    "security_metrics": {
+      "phishing": {
+        "self_signed": 10974,
+        "uses_sha1": 10974
+      },
+      "normal": {
+        "self_signed": 9591,
+        "uses_sha1": 9591
+      }
+    }
+  }
+}

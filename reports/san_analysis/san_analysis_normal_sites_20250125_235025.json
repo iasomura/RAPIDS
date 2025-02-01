@@ -1,0 +1,10 @@
+{
+  "total_certificates": 9591,
+  "certificates_with_san": 0,
+  "san_ratio": 0.0,
+  "san_count_distribution": {
+    "0": 9591
+  },
+  "average_sans_per_cert": 0.0,
+  "median_sans_per_cert": 0.0,
+  "max_sans_per_cert": 
