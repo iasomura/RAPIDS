@@ -12,6 +12,7 @@
 __pycache__/
 
 nitter/logs/
+notebooks/certificate_analysis/old
 
 # ただし logs/ 全体は無視しない
 !logs/
